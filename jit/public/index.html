@@ -75,18 +75,17 @@
       return textDecoder.decode(new Uint8Array(buffer, p, l));
     }
 
+    table = new WebAssembly.Table({ initial: 2, element: 'anyfunc' });
+
     const ffi = {
       env: {
       // '': {
         compile(len) {
           const data = new Uint8Array(u8a.buffer, dataOffset + 16, len);
-          console.log({ data, len })
           update(data);
           const instance = new WebAssembly.Instance(new WebAssembly.Module(data));
           const func = instance.exports['0'];
-          table.set(0, func);
-          // this breaks:
-          // table.set(1, func);
+          table.set(1, func);
         },
         consoleLogString(p, l) {
           console.log(stringAt(p, l));
@@ -94,7 +93,8 @@
         consoleLogVar(p, l, v) {
           console.log(`${stringAt(p, l)}: ${v}`);
         },
-      }
+        __indirect_function_table: table,
+      },
     };
 
     const response = await fetch('jit.wasm');
@@ -102,7 +102,7 @@
     const { module, instance } = await WebAssembly.instantiate(sourceBytes, ffi);
     gen = instance.exports.gen;
     call = instance.exports.call;
-    table = instance.exports.__indirect_function_table;
+    // table = instance.exports.__indirect_function_table;
     // table = instance.exports.table;
     memory = instance.exports.memory;
     // memory = instance.exports.mem;
