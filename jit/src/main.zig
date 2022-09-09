@@ -1,107 +1,5 @@
 const std = @import("std");
 
-extern fn compile(i32) void;
-
-export fn gen() i32 {
-    // var p: i32 = undefined;
-    // var d: i32 = undefined;
-    // var o: i32 = undefined;
-    // var count: i32 = undefined;
-    // var c: i32 = undefined;
-    // var op: i32 = undefined;
-    // var oval: i32 = undefined;
-    var p: i32 = 0;
-    var d: i32 = 0;
-    var o: i32 = 0;
-    var count: i32 = 0;
-    var c: i32 = 0;
-    var op: i32 = 0;
-    var oval: i32 = 0;
-
-    err: {
-        endparse: {
-            while (true)  {
-                push: {
-                    op: {
-                        num: {
-                            p += 1;
-                            c = @intToPtr(*u8, @intCast(usize, p) + 255).*;
-                            if (c == 0) break :endparse;
-
-                            op = c - 0x28;
-                            // op = c - 40;
-                            switch (op) {
-                                0 => break :push,
-                                1, 2, 3, 5, 7 => break :op,
-                                8, 9, 10, 11, 12, 13, 14, 15, 16, 17 => break :num,
-                                else => break :err,
-                            }
-                        }
-                        d += 2;
-                        @intToPtr(*i16, @intCast(usize, d) + 45).* = @intCast(i16, ((c - 0x30) << 8) | 0x41);
-
-                        count += 1;
-                        continue;
-                    }
-                    exit: {
-                        while (true) {
-                            if (o == 0) break :exit;
-                            oval = @intToPtr(*u8, @intCast(usize, o) - 1 + 512).*;
-                            if (oval == 0 or @intToPtr(*u8, @intCast(usize, oval)).* < @intToPtr(*u8, @intCast(usize, op)).*) break :exit;
-
-                            count -= 1;
-                            if (count < 1) break :err;
-
-                            o -= 1;
-
-                            d += 1;
-                            @intToPtr(*u8, @intCast(usize, d) + 46).* = @intToPtr(*u8, @intCast(usize, oval) + 8).*;
-                            continue;
-                        }
-                    }
-                    if (op != 1) break :push;
-
-                    if (o == 0) break :err;
-
-                    o -= 1;
-                    continue;
-                }
-                o += 1;
-                @intToPtr(*u8, @intCast(usize, o) + 511).* = @intCast(u8, op);
-                continue;
-            }
-        }
-        exit: {
-            while (true)  {
-                if (o == 0) break :exit;
-
-                count -= 1;
-                if (count < 1) break :err;
-
-                d += 1;
-                o -= 1;
-                @intToPtr(*u8, @intCast(usize, d) + 46).* = @intToPtr(*u8, @intToPtr(*u8, @intCast(usize, o) + 512).* + 8).*;
-                continue ;
-            }
-        }
-        if (count != 1) break :err;
-
-        @intToPtr(*u8, @intCast(usize, d) + 47).* = 0xb;
-
-        @intToPtr(*u8, 43).* = @intCast(u8, d + 4);
-
-        @intToPtr(*u8, 45).* = @intCast(u8, d + 2);
-
-        compile(d + 32);
-        return 1;
-    }
-    return 0;
-}
-
-export fn call() i32 {
-    return @intToPtr(fn () i32, 1)();
-}
-
 export const data = [_]u8{
     // 0     1     2     3     4     5     6     7
     // (     )     *     +     ,     -     .     /
@@ -115,15 +13,133 @@ export const data = [_]u8{
     0x0a, 0xff, 0x01, 0xff, 0x00,
 };
 
-// export const data: []const u8 =
-//   //  0   1   2   3   4   5   6   7
-//   //  (   )   *   +   ,   -   .   /
-//   //  x   0   2   1   x   1   x   2
-//   "\x00\x00\x02\x01\x00\x01\x00\x02"  // precedence
-//   ++ "\x00\x00\x6c\x6a\x00\x6b\x00\x6d"  // wasm op
+// dummy zero data to fill with rest of wasm module
+export const dummy = [_]u8{0} ** 100;
 
-//   ++ "\x00\x61\x73\x6d\x01\x00\x00\x00"  // magic/version
-//   ++ "\x01\x05\x01\x60\x00\x01\x7f"     // type: func () -> i32
-//   ++ "\x03\x02\x01\x00"              // func: type 0
-//   ++ "\x07\x05\x01\x01\x30\x00\x00"     // export: func 0 -> "0"
-//   ++ "\x0a\xff\x01\xff\x00";
+extern fn compile(i32) void;
+
+extern fn consoleLogString(p: [*]const u8, l: usize) void;
+
+extern fn consoleLogVar(p: [*]const u8, l: usize, v: i32) void;
+
+fn logString(string: []const u8) void {
+    consoleLogString(string.ptr, string.len);
+}
+
+fn logVar(name: []const u8, value: i32) void {
+    consoleLogVar(name.ptr, name.len, value);
+}
+
+fn load(comptime T: type, index: i32, comptime offset: ?usize) i32 {
+    logString("load!");
+    logVar("index", index);
+    logVar("offset", (offset orelse 0));
+    logVar("position", index + (offset orelse 0));
+    const value = @intCast(i32, @intToPtr(*T, @intCast(usize, index) + (offset orelse 0)).*);
+    logVar("value", value);
+    return value;
+}
+
+fn store(comptime T: type, value: i32, index: i32, comptime offset: ?usize) void {
+    logString("store!");
+    logVar("value", value);
+    logVar("index", index);
+    logVar("offset", @intCast(i32, offset orelse 0));
+    logVar("position", index + @intCast(i32, offset orelse 0));
+    @intToPtr(*T, @intCast(usize, index) + (offset orelse 0)).* = @intCast(T, value);
+}
+
+export fn gen() i32 {
+    var p: i32 = 0;
+    var d: i32 = 0;
+    var o: i32 = 0;
+    var count: i32 = 0;
+    var c: i32 = 0;
+    var op: i32 = 0;
+    var oval: i32 = 0;
+
+    err: {
+        endparse: {
+            while (true) {
+                push: {
+                    op: {
+                        num: {
+                            p += 1;
+                            c = load(u8, p, 255);
+                            if (c == 0) break :endparse;
+
+                            op = c - 0x28;
+                            switch (op) {
+                                0 => break :push,
+                                1, 2, 3, 5, 7 => break :op,
+                                8, 9, 10, 11, 12, 13, 14, 15, 16, 17 => break :num,
+                                else => break :err,
+                            }
+                        }
+                        d += 2;
+                        store(i16, ((c - 0x30) << 8) | 0x41, d, 45);
+
+                        count += 1;
+                        continue;
+                    }
+                    exit: {
+                        while (true) {
+                            if (o == 0) break :exit;
+
+                            c = load(u8, p, 255);
+                            oval = load(u8, o - 1, 512);
+                            if (oval == 0 or load(u8, oval, 0) < load(u8, op, 0)) break :exit;
+
+                            count -= 1;
+                            if (count < 1) break :err;
+
+                            o -= 1;
+
+                            d += 1;
+                            store(u8, load(u8, oval, 8), d, 46);
+                            continue;
+                        }
+                    }
+                    if (op != 1) break :push;
+
+                    if (o == 0) break :err;
+
+                    o -= 1;
+                    continue;
+                }
+                o += 1;
+                store(u8, op, o, 511);
+                continue;
+            }
+        }
+        exit: {
+            while (true) {
+                if (o == 0) break :exit;
+
+                count -= 1;
+                if (count < 1) break :err;
+
+                d += 1;
+                o -= 1;
+                store(u8, load(u8, o, 512), d, 46);
+                continue;
+            }
+        }
+        if (count != 1) break :err;
+
+        store(u8, 0xb, d, 47);
+
+        store(u8, d + 4, 43, 0);
+
+        store(u8, d + 2, 45, 0);
+
+        compile(d + 32);
+        return 1;
+    }
+    return 0;
+}
+
+export fn call() i32 {
+    // return @intToPtr(fn () i32, 1)();
+    return @intToPtr(*const fn () i32, 1)();
+}

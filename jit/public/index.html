@@ -13,9 +13,20 @@
   Here's the wasm module:
   </p>
   <pre id="wasm"></pre>
-  <script>
-    let $ = document.querySelector.bind(document);
-    let table, u8a, gen, call;
+  <script type="module">
+    const $ = document.querySelector.bind(document);
+
+    let table, u8a, gen, call, dataOffset, memory, buffer;
+
+    $('button').addEventListener('click', event => {
+      let input = $('input').value;
+      for (let i = 0; i < input.length; ++i) {
+        u8a[256 + i] = input.charCodeAt(i);
+      }
+      u8a[256 + input.length] = 0;
+      $('#wasm').textContent = '';
+      $('#result').textContent = gen() ? `result = ${call()}` : `error`;
+    });
 
     function bytes(data, n, doc) {
       let s = '';
@@ -53,42 +64,51 @@
           case 0x6b: data = bytes(data, 1, `i32.sub`); break;
           case 0x6c: data = bytes(data, 1, `i32.mul`); break;
           case 0x6d: data = bytes(data, 1, `i32.div`); break;
-          default: throw new Error(data)
+          default: throw new Error(`unknown data ${data[0]} (0x${data[0].toString(16)}): ${String.fromCharCode(data[0])}`)
         }
       }
     }
 
-    let ffi = {
+    const textDecoder = new TextDecoder();
+
+    function stringAt(p, l) {
+      return textDecoder.decode(new Uint8Array(buffer, p, l));
+    }
+
+    const ffi = {
       env: {
-        compile: (len) => {
-          let data = new Uint8Array(u8a.buffer, 16, len);
+      // '': {
+        compile(len) {
+          const data = new Uint8Array(u8a.buffer, dataOffset + 16, len);
+          console.log({ data, len })
           update(data);
-          let instance = new WebAssembly.Instance(new WebAssembly.Module(data));
-          let func = instance.exports['0'];
+          const instance = new WebAssembly.Instance(new WebAssembly.Module(data));
+          const func = instance.exports['0'];
           table.set(0, func);
-        }
+        },
+        consoleLogString(p, l) {
+          console.log(stringAt(p, l));
+        },
+        consoleLogVar(p, l, v) {
+          console.log(`${stringAt(p, l)}: ${v}`);
+        },
       }
     };
 
-    fetch('jit.wasm')
-      .then(response => response.arrayBuffer())
-      .then(bytes => WebAssembly.instantiate(bytes, ffi))
-      .then(source => {
-        instance = source.instance;
-        u8a = new Uint8Array(instance.exports.memory.buffer);
-        gen = instance.exports.gen;
-        call = instance.exports.call;
-        table = instance.exports.table;
-      });
+    const response = await fetch('jit.wasm');
+    const sourceBytes = await response.arrayBuffer();
+    const { module, instance } = await WebAssembly.instantiate(sourceBytes, ffi);
+    u8a = new Uint8Array(instance.exports.memory.buffer);
+    gen = instance.exports.gen;
+    call = instance.exports.call;
+    // table = instance.exports.table;
+    table = instance.exports.__indirect_function_table;
 
-    $('button').addEventListener('click', event => {
-      let input = $('input').value;
-      for (let i = 0; i < input.length; ++i) {
-        u8a[256 + i] = input.charCodeAt(i);
-      }
-      u8a[256 + input.length] = 0;
-      $('#wasm').textContent = '';
-      $('#result').textContent = gen() ? `result = ${call()}` : `error`;
-    });
+    dataOffset = 0;
+    // dataOffset = instance.exports.data.value;
+    // memory = instance.exports.mem;
+    memory = instance.exports.memory;
+    buffer = memory.buffer;
+    Object.assign(window, { module, instance, u8a, gen, call, table, dataOffset, memory, buffer });
   </script>
 </body>
