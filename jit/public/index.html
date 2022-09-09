@@ -85,6 +85,8 @@
           const instance = new WebAssembly.Instance(new WebAssembly.Module(data));
           const func = instance.exports['0'];
           table.set(0, func);
+          // this breaks:
+          // table.set(1, func);
         },
         consoleLogString(p, l) {
           console.log(stringAt(p, l));
@@ -98,17 +100,16 @@
     const response = await fetch('jit.wasm');
     const sourceBytes = await response.arrayBuffer();
     const { module, instance } = await WebAssembly.instantiate(sourceBytes, ffi);
-    u8a = new Uint8Array(instance.exports.memory.buffer);
     gen = instance.exports.gen;
     call = instance.exports.call;
-    // table = instance.exports.table;
     table = instance.exports.__indirect_function_table;
-
+    // table = instance.exports.table;
+    memory = instance.exports.memory;
+    // memory = instance.exports.mem;
+    buffer = memory.buffer;
+    u8a = new Uint8Array(buffer);
     dataOffset = 0;
     // dataOffset = instance.exports.data.value;
-    // memory = instance.exports.mem;
-    memory = instance.exports.memory;
-    buffer = memory.buffer;
-    Object.assign(window, { module, instance, u8a, gen, call, table, dataOffset, memory, buffer });
+    Object.assign(window, { module, instance, table, memory, buffer, u8a, dataOffset });
   </script>
 </body>

@@ -31,21 +31,21 @@ fn logVar(name: []const u8, value: i32) void {
 }
 
 fn load(comptime T: type, index: i32, comptime offset: ?usize) i32 {
-    logString("load!");
-    logVar("index", index);
-    logVar("offset", (offset orelse 0));
-    logVar("position", index + (offset orelse 0));
+    // logString("load!");
+    // logVar("index", index);
+    // logVar("offset", (offset orelse 0));
+    // logVar("position", index + (offset orelse 0));
     const value = @intCast(i32, @intToPtr(*T, @intCast(usize, index) + (offset orelse 0)).*);
-    logVar("value", value);
+    // logVar("value", value);
     return value;
 }
 
 fn store(comptime T: type, value: i32, index: i32, comptime offset: ?usize) void {
-    logString("store!");
-    logVar("value", value);
-    logVar("index", index);
-    logVar("offset", @intCast(i32, offset orelse 0));
-    logVar("position", index + @intCast(i32, offset orelse 0));
+    // logString("store!");
+    // logVar("value", value);
+    // logVar("index", index);
+    // logVar("offset", @intCast(i32, offset orelse 0));
+    // logVar("position", index + @intCast(i32, offset orelse 0));
     @intToPtr(*T, @intCast(usize, index) + (offset orelse 0)).* = @intCast(T, value);
 }
 
@@ -121,7 +121,7 @@ export fn gen() i32 {
 
                 d += 1;
                 o -= 1;
-                store(u8, load(u8, o, 512), d, 46);
+                store(u8, load(u8, load(u8, o, 512), 8), d, 46);
                 continue;
             }
         }
@@ -139,7 +139,20 @@ export fn gen() i32 {
     return 0;
 }
 
+// (func (export "call") (result i32)
+//   (call_indirect (result i32) (i32.const 0)))
 export fn call() i32 {
+    // for stage1:
+    // return @intToPtr(fn () i32, 0)(); // some kind of allowzero here
     // return @intToPtr(fn () i32, 1)();
+
+    // for stage2:
     return @intToPtr(*const fn () i32, 1)();
+
+    // other attempts, all generate unreachable
+    // return @intToPtr(*allowzero const fn () i32, 0)();
+    // var i: usize = 0;
+    // return @intToPtr(*allowzero const fn () i32, i)();
+    // var i: usize = 0;
+    // return @call(.{ .modifier = .never_inline }, @intToPtr(*allowzero const fn () i32, i), .{});
 }
